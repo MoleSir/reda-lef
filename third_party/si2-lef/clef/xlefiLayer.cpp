@@ -569,6 +569,14 @@ int lefiLayer_numSpacing (const ::lefiLayer* obj) {
     return ((LefDefParser::lefiLayer*)obj)->numSpacing();
 }
 
+int lefiLayer_numSpacingTable (const ::lefiLayer* obj) {
+    return ((LefDefParser::lefiLayer*)obj)->numSpacingTable();
+}
+
+const void* lefiLayer_spacingTable(const ::lefiLayer* obj, int index) {
+    return ((LefDefParser::lefiLayer*)obj)->spacingTable(index);
+}
+
 char* lefiLayer_name (const ::lefiLayer* obj) {
     return ((LefDefParser::lefiLayer*)obj)->name();
 }

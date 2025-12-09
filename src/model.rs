@@ -3,59 +3,24 @@ use std::fmt;
 use std::str::FromStr;
 
 /// Top-level structure of a LEF library.
-#[derive(Clone, Debug)]
-pub struct Lef {
+#[derive(Default, Clone, Debug)]
+pub struct LefTechnology {
     /// LEF version.
     pub version: Option<f64>,
     /// Characters used to indicate bus bits. Default is `[` and `]`.
     pub busbitchars: (char, char),
     /// Character used as path separator. Default is `/`.
     pub dividerchar: char,
+    /// Units used in this library.
+    pub units: LefUnits,
+    /// Grid for geometrical alignment. Cells and shapes snap to locations on this grid.
+    pub manufacturing_grid: Option<f64>,
 
     /// Definitions of fixed VIAs by name.
     pub vias: HashMap<String, LefViaDefinition>,
     /// All SITE definitions by name.
     pub sites: HashMap<String, LefSiteDefinition>,
 
-    /// Technology information of the design.
-    pub technology: LefTechnologyLef,
-    /// Cell and macro information.
-    pub library: LefLibraryLef,
-
-    /// Extensions as defined by BEGINEXT blocks.
-    pub extensions: HashMap<String, ()>,
-}
-
-impl Default for Lef {
-    fn default() -> Self {
-        Lef {
-            version: None,
-            busbitchars: ('[', ']'),
-            dividerchar: '/',
-            vias: Default::default(),
-            sites: Default::default(),
-            technology: Default::default(),
-            library: Default::default(),
-            extensions: Default::default(),
-        }
-    }
-}
-
-/// Library LEF containing macro and standard cell information.
-#[derive(Clone, Debug, Default)]
-pub struct LefLibraryLef {
-    /// All MACRO definitions of the library.
-    pub macros: HashMap<String, LefMacro>,
-}
-
-/// Technology LEF containing technology information.
-#[derive(Clone, Debug, Default)]
-pub struct LefTechnologyLef {
-    /// Units used in this library.
-    pub units: LefUnits,
-    /// Grid for geometrical alignment. Cells and shapes snap to locations on this grid.
-    pub manufacturing_grid: Option<f64>,
-    ///
     pub use_min_spacing: Option<()>,
     /// Type of distance measure (Euclidean: `dx^2 + dy^2`, MaxXY: `max(dx, dy)`)
     pub clearance_measure: LefClearanceMeasure,
@@ -78,8 +43,20 @@ pub struct LefTechnologyLef {
     pub via_rules_generate: HashMap<String, ()>,
     /// NONDEFAULTRULEs by name.
     pub non_default_rule: (),
-    // /// All SITE definitions by name.
-    // pub sites: HashMap<String, ()>,
+
+    /// Extensions as defined by BEGINEXT blocks.
+    pub extensions: HashMap<String, ()>,
+}
+
+impl LefTechnology {
+    pub fn new() -> Self {
+        LefTechnology {
+            version: None,
+            busbitchars: ('[', ']'),
+            dividerchar: '/',
+            ..Default::default()
+        }
+    }
 }
 
 /// Units used in the library.
@@ -565,7 +542,7 @@ pub enum LefSpacingType {
         power_ground_only: bool,
     },
     NotchLength {
-        min_notch_length: bool,
+        min_notch_length: f64,
     },
     EndOfNotchWidth {
         end_of_notch_width: f64,
@@ -602,8 +579,6 @@ pub struct LefSpacingTable {
 pub enum LefLayer {
     /// MASTERSLICE (poly) layer.
     MasterSlice(LefMasterSliceLayer),
-    // /// Implant layer.
-    // Implant(()),
     /// CUT layer.
     Cut(LefCutLayer),
     /// ROUTING layer.

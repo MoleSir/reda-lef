@@ -220,6 +220,8 @@ EXTERN int lefiLayer_propIsNumber (const lefiLayer* obj, int  index);
 EXTERN int lefiLayer_propIsString (const lefiLayer* obj, int  index);
 
 EXTERN int lefiLayer_numSpacing (const lefiLayer* obj);
+EXTERN int lefiLayer_numSpacingTable (const lefiLayer* obj);
+EXTERN const void* lefiLayer_spacingTable(const lefiLayer* obj, int index);
 
 EXTERN char* lefiLayer_name (const lefiLayer* obj);
 EXTERN const char* lefiLayer_type (const lefiLayer* obj);

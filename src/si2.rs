@@ -3057,6 +3057,12 @@ unsafe extern "C" {
     pub fn lefiLayer_numSpacing(obj: *const lefiLayer) -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
+    pub fn lefiLayer_numSpacingTable(obj: *const lefiLayer) -> ::std::os::raw::c_int;
+}
+unsafe extern "C" {
+    pub fn lefiLayer_spacingTable(obj: *const lefiLayer, index: ::std::os::raw::c_int) -> *const lefiSpacingTable;
+}
+unsafe extern "C" {
     pub fn lefiLayer_name(obj: *const lefiLayer) -> *mut ::std::os::raw::c_char;
 }
 unsafe extern "C" {

@@ -18,10 +18,26 @@ pub unsafe fn open_c_file(path: &str, mode: &str) -> (*mut libc::FILE, *mut si2:
     }
 }
 
-pub unsafe fn from_mut_c_char_ptr(raw: *mut ::std::os::raw::c_char) -> String {
+pub unsafe fn const_c_char_ptr_to_string(raw: *const ::std::os::raw::c_char) -> String {
     unsafe { CStr::from_ptr(raw).to_string_lossy().into_owned() }
 }
 
-pub unsafe fn from_const_c_char_ptr(raw: *const ::std::os::raw::c_char) -> String {
+pub unsafe fn mut_c_char_ptr_to_string(raw: *mut ::std::os::raw::c_char) -> String {
     unsafe { CStr::from_ptr(raw).to_string_lossy().into_owned() }
+}
+
+pub unsafe fn const_c_char_ptr_to_str(raw: *const ::std::os::raw::c_char) -> &'static str {
+    unsafe { CStr::from_ptr(raw).to_str().unwrap() }
+}
+
+pub unsafe fn mut_c_char_ptr_to_str(raw: *mut ::std::os::raw::c_char) -> &'static str {
+    unsafe { CStr::from_ptr(raw).to_str().unwrap() }
+}
+
+pub unsafe fn const_c_char_ptr_to_cstr(raw: *const ::std::os::raw::c_char) -> &'static CStr {
+    unsafe { CStr::from_ptr(raw) }
+}
+
+pub unsafe fn mut_c_char_ptr_to_cstr(raw: *mut ::std::os::raw::c_char) -> &'static CStr {
+    unsafe { CStr::from_ptr(raw) }
 }
