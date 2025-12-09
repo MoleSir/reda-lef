@@ -17,7 +17,9 @@ pub struct LefTechnology {
     pub manufacturing_grid: Option<f64>,
 
     /// Definitions of fixed VIAs by name.
-    pub vias: HashMap<String, LefViaDefinition>,
+    pub vias: HashMap<String, LefVia>,
+    pub via_rules: HashMap<String, LefViaRule>,
+
     /// All SITE definitions by name.
     pub sites: HashMap<String, LefSiteDefinition>,
 
@@ -94,7 +96,7 @@ pub struct LefSite {
 }
 
 /// SITE definition.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct LefSiteDefinition {
     /// Name of the site.
     pub name: String,
@@ -177,61 +179,43 @@ pub struct LefGeometry {
     pub shape: LefShape,
 }
 
-/// A LEF via definition.
 #[derive(Clone, Debug)]
-pub enum LefViaDefinition {
-    /// Via has been generated with according to a via rule.
-    GeneratedVia(LefGeneratedVia),
-    /// Via is defined explicitly with shapes on layers.
-    FixedVia(LefFixedVia),
+pub enum LefViaRule {
+    Generate(LefViaGenerateRule),
+    // TODO: Fixed
 }
 
 /// A generated via.
 #[derive(Clone, Debug, Default)]
-pub struct LefGeneratedVia {
+pub struct LefViaGenerateRule {
     /// Default via to be used for routing between the adjacent layers.
     pub is_default: bool,
     /// Via generate rule which was used to generate this via.
     pub rule_name: String,
-    /// Width and height of the via cut.
-    pub cut_size: (f64, f64),
     /// Bottom, cut and top layer.
     pub layers: (String, String, String),
-    /// Spacing in x and y directions.
-    pub cut_spacing: (f64, f64),
-    /// bottom-x, bottom-y, top-x, top-y enclosure
-    pub enclosure: (f64, f64, f64, f64),
-    /// Number of rows and columns.
-    pub num_rows_cols: Option<(u32, u32)>,
-    /// Coordinate of the origin.
-    pub origin: Option<(f64, f64)>,
-    /// Offsets of bottom-x, bottom-y, top-x, top-y
-    pub offset: Option<(f64, f64, f64, f64)>,
-    /// ASCII string which encodes the pattern of repeated vias.
-    pub cut_pattern: Option<String>,
+    /// (bottom-x, bottom-y), (top-x, top-y) enclosure
+    pub enclosure: ((f64, f64), (f64, f64)),
+    /// (bottom-minwidth, bottom-maxwidth) (top-minwidth, rop-maxwidth)
+    pub width: ((f64, f64), (f64, f64)),
+    /// cut rectangle
+    pub rect: ((f64, f64), (f64, f64)),
+    /// center-to-center spacing in the x and y dimensions to create an array of contact cuts.
+    pub spacing: (f64, f64),
 }
 
 /// Either a rectangle or a polygon.
 #[derive(Clone, Debug)]
-pub enum LefRectOrPolygon {
+pub enum LefViaShape {
     /// Axis-aligned rectangle.
-    Rect(((f64, f64), (f64, f64))),
+    Rect((f64, f64), (f64, f64)),
     /// Polygon.
     Polygon(Vec<(f64, f64)>),
 }
 
-/// Single shape used in the definition of a fixed via.
-#[derive(Clone, Debug)]
-pub struct LefViaShape {
-    /// Optional mask number for multi-patterning.
-    pub mask_num: Option<u8>,
-    /// A rectangle or a polygon shape.
-    pub shape: LefRectOrPolygon,
-}
-
 /// An explicitly defined via.
 #[derive(Clone, Debug, Default)]
-pub struct LefFixedVia {
+pub struct LefVia {
     /// Default via to be used for routing between the adjacent layers.
     pub is_default: bool,
     /// Electrical resistance of the via.
@@ -924,6 +908,12 @@ pub enum LefSiteClass {
     PAD,
 }
 
+impl Default for LefSiteClass {
+    fn default() -> Self {
+        Self::CORE
+    }
+}
+
 impl FromStr for LefSiteClass {
     type Err = ();
 
@@ -1175,11 +1165,11 @@ impl fmt::Display for LefPropertyValue {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
 pub struct LefSymmetry {
     /// Mirroring macro at x-axis.
-    x: bool,
+    pub x: bool,
     /// Mirroring macro at y-axis.
-    y: bool,
+    pub y: bool,
     /// Rotating by 90 degrees. Intended for pad cells only.
-    r90: bool,
+    pub r90: bool,
 }
 
 impl LefSymmetry {

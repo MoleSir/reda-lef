@@ -1,10 +1,16 @@
 mod utils;
 mod layer;
+mod via;
 mod error;
+
+use std::str::FromStr;
 use std::sync::RwLock;
 pub use error::*;
 use std::path::Path;
 use crate::si2;
+use crate::LefSiteClass;
+use crate::LefSiteDefinition;
+use crate::LefSymmetry;
 use crate::LefTechnology;
 use std::os::raw::{c_void, c_int, c_char};
 use std::sync::LazyLock;
@@ -47,7 +53,10 @@ impl LefTechnologyReader {
             si2::lefrSetDividerCharCbk(Some(Self::read_dividerchar));
             si2::lefrSetUnitsCbk(Some(Self::read_units));
             si2::lefrSetManufacturingCbk(Some(Self::read_manufacturing_grid));
+            si2::lefrSetSiteCbk(Some(Self::read_site));
             si2::lefrSetLayerCbk(Some(Self::read_layer));
+            si2::lefrSetViaCbk(Some(Self::read_via));
+            si2::lefrSetViaRuleCbk(Some(Self::read_viarule));
             si2::lefrSetLogFunction(Some(log));
 
             let self_ptr = &mut self as *mut Self as *mut c_void;
@@ -135,5 +144,30 @@ impl LefTechnologyReader {
         }
         0
     } 
+
+    unsafe extern "C" fn read_site(_: si2::lefrCallbackType_e, obj: *mut si2::lefiSite, ud: *mut c_void) -> c_int {
+        unsafe {
+            let reader = &mut *(ud as *mut Self);
+
+            // si2::lefiSite_numSites(obj)
+            let mut site = LefSiteDefinition::default();
+            site.name = utils::const_c_char_ptr_to_string(si2::lefiSite_name(obj));
+            if si2::lefiSite_hasSize(obj) != 0 {
+                site.size = (si2::lefiSite_sizeX(obj), si2::lefiSite_sizeY(obj));
+            }
+            if si2::lefiSite_hasClass(obj) != 0 {
+                let class = utils::const_c_char_ptr_to_str(si2::lefiSite_siteClass(obj));
+                site.class = LefSiteClass::from_str(class).unwrap();
+            }
+
+            let x = si2::lefiSite_hasXSymmetry(obj) != 0;
+            let y = si2::lefiSite_hasYSymmetry(obj) != 0;
+            let r90 = si2::lefiSite_has90Symmetry(obj) != 0;
+            site.symmetry = LefSymmetry { x, y, r90 };
+
+            reader.lef.sites.insert(site.name.clone(), site);
+        }
+        0
+    }
 }
 

@@ -37,7 +37,6 @@ impl LefTechnologyReader {
     pub unsafe extern "C" fn read_layer(_: si2::lefrCallbackType_e, obj: *mut si2::lefiLayer, ud: *mut c_void) -> c_int {
         unsafe {
             let reader = &mut *(ud as *mut Self);
-            si2::lefiLayer_width(obj);
             let tpe =  utils::const_c_char_ptr_to_str(si2::lefiLayer_type(obj));
             match tpe {
                 "CUT" => {
