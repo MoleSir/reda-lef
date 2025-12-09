@@ -1,4 +1,4 @@
-use crate::{LefCutLayer, LefCutSpacingRule, LefLayer, LefRoutingDirection, LefRoutingLayer, LefSpacingRules, LefSpacingTable, LefSpacingType};
+use crate::{LefCutLayer, LefCutSpacingRule, LefLayer, LefPropertyValue, LefRoutingDirection, LefRoutingLayer, LefSpacingRules, LefSpacingTable, LefSpacingType};
 use super::{LefReadResult, LefTechnologyReader};
 use crate::si2;
 use super::utils;
@@ -28,6 +28,14 @@ macro_rules! layer_attr {
         paste! {
             if si2::[< lefiLayer_has $attr_name:camel >]($si2_obj) != 0 { 
                 $layer.$field_name = si2::[< lefiLayer_ $attr_name >]($si2_obj);
+            }
+        }
+    };
+
+    ($layer:ident, $si2_obj:ident, $field_name:ident, $attr_name:ident, $as_ty:ty) => {
+        paste! {
+            if si2::[< lefiLayer_has $attr_name:camel >]($si2_obj) != 0 { 
+                $layer.$field_name = si2::[< lefiLayer_ $attr_name >]($si2_obj) as $as_ty;
             }
         }
     };
@@ -75,7 +83,11 @@ impl LefTechnologyReader {
             layer.name = utils::const_c_char_ptr_to_string(si2::lefiLayer_name(obj));
 
             layer_attr_opt!(layer, obj, mask_num, mask, u32);
-            layer_attr!(layer, obj, width, width);           
+            layer_attr!(layer, obj, width, width);
+            layer_attr!(layer, obj, cap_multiplier, capMultiplier, u32);
+            layer_attr_opt!(layer, obj, diag_width, diagWidth);
+            layer_attr_opt!(layer, obj, diag_spacing, diagSpacing);
+            layer_attr_opt!(layer, obj, diag_min_edge_length, diagMinEdgeLength);
             layer_attr_opt!(layer, obj, min_area, area);           
             layer_attr_opt!(layer, obj, max_width, maxwidth);      
             layer_attr_opt!(layer, obj, min_width, minwidth);      
@@ -85,11 +97,18 @@ impl LefTechnologyReader {
             layer_attr_opt!(layer, obj, capacitance, capacitance); 
             layer_attr_opt!(layer, obj, thickness, thickness);
             layer_attr_opt!(layer, obj, edge_capacitance, edgeCap);
+            layer_attr_opt!(layer, obj, shrinkage, shrinkage);
+            layer_attr_opt!(layer, obj, minimum_density, minimumDensity);
+            layer_attr_opt!(layer, obj, maximum_density, maximumDensity);
+            layer_attr_opt!(layer, obj, density_check_step, densityCheckStep);
+            layer_attr_opt!(layer, obj, fill_active_spacing, fillActiveSpacing);
+            layer_attr_opt!(layer, obj, wire_extension, wireExtension);
 
             if si2::lefiLayer_hasDirection(obj) != 0 { // DIRECTION
                 let direction = utils::const_c_char_ptr_to_str(si2::lefiLayer_direction(obj));
                 layer.direction = LefRoutingDirection::from_str(&direction).unwrap();   
             }
+
             if si2::lefiLayer_hasPitch(obj) != 0 { // PITCH
                 let pitch = si2::lefiLayer_pitch(obj);
                 layer.pitch = (pitch, pitch);
@@ -98,6 +117,16 @@ impl LefTechnologyReader {
                 let y_pitch = si2::lefiLayer_pitchY(obj);
                 layer.pitch = (x_pitch, y_pitch);
             } 
+            
+            if si2::lefiLayer_hasDiagPitch(obj) != 0 { // DIAG PITCH
+                let pitch = si2::lefiLayer_diagPitch(obj);
+                layer.diag_pitch = Some((pitch, pitch));
+            } else if si2::lefiLayer_hasXYDiagPitch(obj) != 0 {
+                let x_pitch = si2::lefiLayer_diagPitchX(obj);
+                let y_pitch = si2::lefiLayer_diagPitchY(obj);
+                layer.diag_pitch = Some((x_pitch, y_pitch));
+            } 
+            
             if si2::lefiLayer_hasOffset(obj) != 0 { // OFFSET
                 let offset = si2::lefiLayer_offset(obj);
                 layer.offset = Some((offset, offset));
@@ -106,6 +135,11 @@ impl LefTechnologyReader {
                 let y_offset = si2::lefiLayer_offsetY(obj);
                 layer.offset = Some((x_offset, y_offset));
             } 
+
+            for index in 0..si2::lefiLayer_numMinSize(obj) {
+                layer.min_size.push((si2::lefiLayer_minSizeWidth(obj, index), si2::lefiLayer_minSizeLength(obj, index)));
+            }
+
             if si2::lefiLayer_hasSpacingNumber(obj) != 0 { // SPACING
                 for index in 0..si2::lefiLayer_numSpacing(obj) {
                     let min_spacing = si2::lefiLayer_spacing(obj, index);
@@ -135,6 +169,7 @@ impl LefTechnologyReader {
                     layer.spacing.push(LefSpacingRules { min_spacing, spacing_type });
                 }
             }
+
             if si2::lefiLayer_numSpacingTable(obj) == 1 { // SPACINGTABLE
                 let table = si2::lefiLayer_spacingTable(obj, 0);
                 if si2::lefiSpacingTable_isInfluence(table) != 0 {
@@ -162,6 +197,16 @@ impl LefTechnologyReader {
                 }                
             }
     
+            for index in 0..si2::lefiLayer_numProps(obj) {
+                let prop = utils::const_c_char_ptr_to_string(si2::lefiLayer_propName(obj, index));
+                if si2::lefiLayer_propIsNumber(obj, index) != 0 {
+                    layer.properties.insert(prop, LefPropertyValue::Real(si2::lefiLayer_propNumber(obj, index)));
+                } else if si2::lefiLayer_propIsString(obj, index) != 0 {
+                    let value = utils::const_c_char_ptr_to_string(si2::lefiLayer_propValue(obj, index));
+                    layer.properties.insert(prop, LefPropertyValue::String(value));
+                }
+            }
+
             Ok(layer)
         }
     }

@@ -8,6 +8,7 @@ use std::sync::RwLock;
 pub use error::*;
 use std::path::Path;
 use crate::si2;
+use crate::LefClearanceMeasure;
 use crate::LefSiteClass;
 use crate::LefSiteDefinition;
 use crate::LefSymmetry;
@@ -16,9 +17,9 @@ use std::os::raw::{c_void, c_int, c_char};
 use std::sync::LazyLock;
 
 impl LefTechnology {
-    pub fn load<P: AsRef<Path>>(path: P) -> LefReadResult<Self> {
+    pub fn load_file<P: AsRef<Path>>(path: P) -> LefReadResult<Self> {
         let reader = LefTechnologyReader::new();
-        unsafe { reader.load_inner(path.as_ref()) }
+        unsafe { reader.load_file_inner(path.as_ref()) }
     }
 }
 
@@ -42,7 +43,7 @@ impl LefTechnologyReader {
         Self { lef: Default::default(), error: None }
     }
 
-    unsafe fn load_inner(mut self, path: &Path) -> LefReadResult<LefTechnology> {
+    unsafe fn load_file_inner(mut self, path: &Path) -> LefReadResult<LefTechnology> {
         let path = path.to_str().unwrap();
         
         ERROR_MESSAGE.write().unwrap().clear();
@@ -53,6 +54,7 @@ impl LefTechnologyReader {
             si2::lefrSetDividerCharCbk(Some(Self::read_dividerchar));
             si2::lefrSetUnitsCbk(Some(Self::read_units));
             si2::lefrSetManufacturingCbk(Some(Self::read_manufacturing_grid));
+            si2::lefrSetClearanceMeasureCbk(Some(Self::read_clearance_measure));
             si2::lefrSetSiteCbk(Some(Self::read_site));
             si2::lefrSetLayerCbk(Some(Self::read_layer));
             si2::lefrSetViaCbk(Some(Self::read_via));
@@ -166,6 +168,14 @@ impl LefTechnologyReader {
             site.symmetry = LefSymmetry { x, y, r90 };
 
             reader.lef.sites.insert(site.name.clone(), site);
+        }
+        0
+    }
+
+    unsafe extern "C" fn read_clearance_measure(_: si2::lefrCallbackType_e, string: *const c_char, ud: *mut c_void) -> c_int {
+        unsafe {
+            let reader = &mut *(ud as *mut Self);
+            reader.lef.clearance_measure = LefClearanceMeasure::from_str(&utils::const_c_char_ptr_to_str(string)).unwrap();
         }
         0
     }

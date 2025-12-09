@@ -15,39 +15,30 @@ pub struct LefTechnology {
     pub units: LefUnits,
     /// Grid for geometrical alignment. Cells and shapes snap to locations on this grid.
     pub manufacturing_grid: Option<f64>,
+    /// Type of distance measure (Euclidean: `dx^2 + dy^2`, MaxXY: `max(dx, dy)`)
+    pub clearance_measure: LefClearanceMeasure,
+
+    /// Definitions of custom properties.
+    pub property_definitions: HashMap<String, ()>,
+
+    /// Layer definitions (masterslice, cut, routing, ...).
+    /// Layers are defined in their process order from bottom to top.
+    pub layers: Vec<LefLayer>,
+
+    /// Maximum number of single-cut vias stacked on top of each other.
+    /// Optionally defines a range of (bottom layer, top layer) where the rule applies. Otherwise
+    /// the rule applies to all layers.
+    pub max_via_stack: Option<(u64, Option<(String, String)>)>,
 
     /// Definitions of fixed VIAs by name.
     pub vias: HashMap<String, LefVia>,
     pub via_rules: HashMap<String, LefViaRule>,
 
-    /// All SITE definitions by name.
-    pub sites: HashMap<String, LefSiteDefinition>,
-
-    pub use_min_spacing: Option<()>,
-    /// Type of distance measure (Euclidean: `dx^2 + dy^2`, MaxXY: `max(dx, dy)`)
-    pub clearance_measure: LefClearanceMeasure,
-    /// Definitions of custom properties.
-    pub property_definitions: HashMap<String, ()>,
-    /// Disable shifting of masks.
-    /// When set, shifting of macro pin mask assignments to other masks is not allowed.
-    /// Used for technologies that use multi-mask patterning.
-    pub fixed_mask: bool,
-    /// Layer definitions (masterslice, cut, routing, ...).
-    /// Layers are defined in their process order from bottom to top.
-    pub layers: Vec<LefLayer>,
-    /// Maximum number of single-cut vias stacked on top of each other.
-    /// Optionally defines a range of (bottom layer, top layer) where the rule applies. Otherwise
-    /// the rule applies to all layers.
-    pub max_via_stack: Option<(u64, Option<(String, String)>)>,
-    // /// Fixed vias by name.
-    // pub vias: HashMap<String, ()>,
-    /// VIA GENERATE rules by name.
-    pub via_rules_generate: HashMap<String, ()>,
     /// NONDEFAULTRULEs by name.
     pub non_default_rule: (),
 
-    /// Extensions as defined by BEGINEXT blocks.
-    pub extensions: HashMap<String, ()>,
+    /// All SITE definitions by name.
+    pub sites: HashMap<String, LefSiteDefinition>,
 }
 
 impl LefTechnology {

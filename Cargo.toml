@@ -1,6 +1,6 @@
 [package]
 name = "reda-lef"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "Lef file library"
 repository = "https://github.com/MoleSir/reda-lef.git"
