@@ -17,28 +17,29 @@ pub struct LefTechnology {
     pub manufacturing_grid: Option<f64>,
     /// Type of distance measure (Euclidean: `dx^2 + dy^2`, MaxXY: `max(dx, dy)`)
     pub clearance_measure: LefClearanceMeasure,
-
-    /// Definitions of custom properties.
-    pub property_definitions: HashMap<String, ()>,
-
     /// Layer definitions (masterslice, cut, routing, ...).
-    /// Layers are defined in their process order from bottom to top.
     pub layers: Vec<LefLayer>,
-
-    /// Maximum number of single-cut vias stacked on top of each other.
-    /// Optionally defines a range of (bottom layer, top layer) where the rule applies. Otherwise
-    /// the rule applies to all layers.
-    pub max_via_stack: Option<(u64, Option<(String, String)>)>,
-
     /// Definitions of fixed VIAs by name.
     pub vias: HashMap<String, LefVia>,
     pub via_rules: HashMap<String, LefViaRule>,
-
-    /// NONDEFAULTRULEs by name.
-    pub non_default_rule: (),
-
     /// All SITE definitions by name.
     pub sites: HashMap<String, LefSiteDefinition>,
+}
+
+#[derive(Default, Clone, Debug)]
+pub struct LefCellLibrary {
+    /// LEF version.
+    pub version: Option<f64>,
+    /// Characters used to indicate bus bits. Default is `[` and `]`.
+    pub busbitchars: (char, char),
+    /// Character used as path separator. Default is `/`.
+    pub dividerchar: char,
+    /// Definitions of fixed VIAs by name.
+    pub vias: HashMap<String, LefVia>,
+    /// site use by name.
+    pub sites: HashMap<String, LefSiteDefinition>,
+    /// macro definitions of the library.
+    pub macros: HashMap<String, LefMacro>,
 }
 
 impl LefTechnology {
@@ -109,35 +110,10 @@ pub struct LefSiteDefinition {
 /// Use `each_offset()` to iterate through all offsets described by this pattern.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct LefStepPattern {
-    /// Number of repetitions in x-direction.
-    pub num_x: u64,
-    /// Number of repetitions in y-direction.
-    pub num_y: u64,
-    /// Spacing in x-direction.
-    pub space_x: f64,
-    /// Spacing in y-direction.
-    pub space_y: f64,
-}
-
-impl LefStepPattern {
-    /// Return an iterator over each offset of the step pattern.
-    /// The origin is at (0.0, 0.0).
-    pub fn each_offset(&self) -> impl Iterator<Item = (f64, f64)> + '_ {
-        (0..self.num_x)
-            .flat_map(move |x| (0..self.num_y).map(move |y| (x, y)))
-            .map(move |(x, y)| (x as f64 * self.space_x, y as f64 * self.space_y))
-    }
-}
-
-impl Default for LefStepPattern {
-    fn default() -> Self {
-        LefStepPattern {
-            num_x: 1,
-            num_y: 1,
-            space_x: 0.0,
-            space_y: 0.0,
-        }
-    }
+    pub x_step: f64,
+    pub y_step: f64,
+    pub x_start: f64,
+    pub y_start: f64,
 }
 
 /// Holds either the value of the SPACING argument or DESIGNRULEWIDTH argument of a geometrical
@@ -152,22 +128,13 @@ pub enum LefSpacingOrDesignRuleWidth {
 
 /// Either a path, rectangle or polygon.
 #[derive(Clone, Debug)]
-pub enum LefShape {
+pub enum LefGeometry {
     /// Width and path.
     Path(f64, Vec<(f64, f64)>),
     /// Corner points of a rectangle.
     Rect((f64, f64), (f64, f64)),
     /// Vertices of a polygon.
     Polygon(Vec<(f64, f64)>),
-}
-
-/// Shape with an optional array step pattern.
-#[derive(Clone, Debug)]
-pub struct LefGeometry {
-    /// Array-like repetition of the shape.
-    pub step_pattern: Option<LefStepPattern>,
-    /// Geometric primitive.
-    pub shape: LefShape,
 }
 
 #[derive(Clone, Debug)]
@@ -239,7 +206,7 @@ pub struct LefMacro {
     /// Symmetry of the macro. Tells how the macro can be mirrored and rotated.
     pub symmetry: LefSymmetry,
 
-    /// SITES associated with the macro. Normal macros have only one associated site.
+    /// SITE associated with the macro. Normal macros have only one associated site.
     pub sites: Vec<LefSite>,
 
     /// Definitions of the electrical pins of the macro.
@@ -264,30 +231,12 @@ pub struct LefMacroPin {
     pub direction: Option<LefPinDirection>,
     /// Type of the signal for this pin.
     pub signal_use: Option<LefSignalUse>,
-
-    /// Net name where this pin should be connected if it is tied HIGH (constant logical 1).
-    pub supply_sensitivity: Option<String>,
-    /// Net name where this pin should be connected if it is tied LOW (constant logical 0).
-    pub ground_sensitivity: Option<String>,
-
     /// Specify special connection requirements of the pin.
     pub shape_type: Option<LefPinShape>,
-
     /// Name of another pin that must be connected to this pin.
     pub must_join: Option<String>,
-    ///
-    pub ports: Vec<LefMacroPinPort>,
-}
-
-/// PORT definition of a MACRO PIN.
-/// A port describes where a pin is geometrically located.
-/// A pin can have multiple ports. They are electrically equivalent.
-#[derive(Clone, Debug, Default)]
-pub struct LefMacroPinPort {
-    /// Type of the port.
-    pub class: Option<LefPortClass>,
-    /// Geometrical shapes and vias that make this port.
-    pub geometries: Vec<LefLayerGeometries>,
+    /// Port 
+    pub port: Vec<LefLayerGeometries>,
 }
 
 /// Geometrical shapes on a named layer as used in MACRO PIN and OBS definitions.
@@ -419,40 +368,6 @@ impl fmt::Display for LefSignalUse {
             Self::Power => f.write_str("POWER"),
             Self::Ground => f.write_str("GROUND"),
             Self::Clock => f.write_str("CLOCK"),
-        }
-    }
-}
-
-/// TODO: Document.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum LefPortClass {
-    ///
-    None,
-    ///
-    Core,
-    ///
-    Bump,
-}
-
-impl FromStr for LefPortClass {
-    type Err = ();
-
-    fn from_str(input: &str) -> Result<Self, Self::Err> {
-        match input {
-            "NONE" => Ok(Self::None),
-            "CORE" => Ok(Self::Core),
-            "BUMP" => Ok(Self::Bump),
-            _ => Err(()),
-        }
-    }
-}
-
-impl fmt::Display for LefPortClass {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::None => f.write_str("NONE"),
-            Self::Core => f.write_str("CORE"),
-            Self::Bump => f.write_str("BUMP"),
         }
     }
 }
@@ -836,7 +751,7 @@ pub enum LefMacroClass {
 }
 
 impl FromStr for LefMacroClass {
-    type Err = ();
+    type Err = String;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         match input {
@@ -846,7 +761,7 @@ impl FromStr for LefMacroClass {
             "PAD" => Ok(Self::PAD(Default::default())),
             "CORE" => Ok(Self::CORE(Default::default())),
             "ENDCAP" => Ok(Self::ENDCAP(Default::default())),
-            _ => Err(()),
+            _ => Err(format!("unimplment: {}", input)),
         }
     }
 }

@@ -21,7 +21,12 @@ A wrap of [Si2 LEF](https://github.com/The-OpenROAD-Project-Attic/lef).
       - [ ] Fixed
     - [x] Site
     - [ ] Property    
-  - Cell Lef (TODO)
+  - Cell Lef
+    - [x] Macro
+    - [ ] Geometries
+      - [x] Rect
+      - [x] Polygon  
+      - [ ] ...
 - Write (TODO)
 
 

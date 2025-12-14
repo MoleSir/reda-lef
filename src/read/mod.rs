@@ -2,16 +2,18 @@ mod utils;
 mod layer;
 mod via;
 mod error;
+mod site;
+mod makro;
 
 use std::str::FromStr;
 use std::sync::RwLock;
 pub use error::*;
 use std::path::Path;
 use crate::si2;
+use crate::LefCellLibrary;
 use crate::LefClearanceMeasure;
-use crate::LefSiteClass;
-use crate::LefSiteDefinition;
-use crate::LefSymmetry;
+use crate::LefLayerGeometries;
+use crate::LefMacroPin;
 use crate::LefTechnology;
 use std::os::raw::{c_void, c_int, c_char};
 use std::sync::LazyLock;
@@ -23,9 +25,11 @@ impl LefTechnology {
     }
 }
 
-pub struct LefTechnologyReader {
-    lef: LefTechnology,
-    error: Option<LefReadError>,
+impl LefCellLibrary {
+    pub fn load_file<P: AsRef<Path>>(path: P) -> LefReadResult<Self> {
+        let reader = LefCellLibraryReader::new();
+        unsafe { reader.load_file_inner(path.as_ref()) }
+    }
 }
 
 static ERROR_MESSAGE: LazyLock<RwLock<String>> = LazyLock::new(|| {
@@ -36,6 +40,15 @@ unsafe extern "C" fn log(msg: *const ::std::os::raw::c_char) {
     let msg = unsafe { utils::const_c_char_ptr_to_string(msg) };
     let mut locked = ERROR_MESSAGE.write().unwrap();
     *locked = msg;  
+}
+
+//=====================================================================
+//                    Technology Reader
+//=====================================================================
+
+pub struct LefTechnologyReader {
+    lef: LefTechnology,
+    error: Option<LefReadError>,
 }
 
 impl LefTechnologyReader {
@@ -147,35 +160,97 @@ impl LefTechnologyReader {
         0
     } 
 
-    unsafe extern "C" fn read_site(_: si2::lefrCallbackType_e, obj: *mut si2::lefiSite, ud: *mut c_void) -> c_int {
-        unsafe {
-            let reader = &mut *(ud as *mut Self);
-
-            // si2::lefiSite_numSites(obj)
-            let mut site = LefSiteDefinition::default();
-            site.name = utils::const_c_char_ptr_to_string(si2::lefiSite_name(obj));
-            if si2::lefiSite_hasSize(obj) != 0 {
-                site.size = (si2::lefiSite_sizeX(obj), si2::lefiSite_sizeY(obj));
-            }
-            if si2::lefiSite_hasClass(obj) != 0 {
-                let class = utils::const_c_char_ptr_to_str(si2::lefiSite_siteClass(obj));
-                site.class = LefSiteClass::from_str(class).unwrap();
-            }
-
-            let x = si2::lefiSite_hasXSymmetry(obj) != 0;
-            let y = si2::lefiSite_hasYSymmetry(obj) != 0;
-            let r90 = si2::lefiSite_has90Symmetry(obj) != 0;
-            site.symmetry = LefSymmetry { x, y, r90 };
-
-            reader.lef.sites.insert(site.name.clone(), site);
-        }
-        0
-    }
-
     unsafe extern "C" fn read_clearance_measure(_: si2::lefrCallbackType_e, string: *const c_char, ud: *mut c_void) -> c_int {
         unsafe {
             let reader = &mut *(ud as *mut Self);
             reader.lef.clearance_measure = LefClearanceMeasure::from_str(&utils::const_c_char_ptr_to_str(string)).unwrap();
+        }
+        0
+    }
+}
+
+//=====================================================================
+//                    Cell Library Reader
+//=====================================================================
+
+pub struct LefCellLibraryReader {
+    lef: LefCellLibrary,
+    error: Option<LefReadError>,
+    pins: Vec<LefMacroPin>,
+    geometries: Vec<LefLayerGeometries>,
+}
+
+impl LefCellLibraryReader {
+    fn new() -> Self {
+        Self { lef: Default::default(), error: None, pins: vec![], geometries: vec![] }
+    }
+
+    fn take_pins(&mut self) -> Vec<LefMacroPin> {
+        std::mem::take(&mut self.pins)
+    }
+
+    fn take_geometries(&mut self) -> Vec<LefLayerGeometries> {
+        std::mem::take(&mut self.geometries)
+    }
+
+    unsafe fn load_file_inner(mut self, path: &Path) -> LefReadResult<LefCellLibrary> {
+        let path = path.to_str().unwrap();
+        
+        ERROR_MESSAGE.write().unwrap().clear();
+        unsafe { 
+            si2::lefrInit(); 
+            si2::lefrSetVersionCbk(Some(Self::read_version));
+            si2::lefrSetBusBitCharsCbk(Some(Self::read_busbitchars));
+            si2::lefrSetDividerCharCbk(Some(Self::read_dividerchar));
+            si2::lefrSetMacroCbk(Some(Self::read_macro));
+            si2::lefrSetSiteCbk(Some(Self::read_site));
+            si2::lefrSetPinCbk(Some(Self::read_pin));
+            si2::lefrSetViaCbk(Some(Self::read_via));
+            si2::lefrSetObstructionCbk(Some(Self::read_obs));
+            si2::lefrSetLogFunction(Some(log));
+
+            let self_ptr = &mut self as *mut Self as *mut c_void;
+
+            let (fp, fp_for_lefr) = utils::open_c_file(path, "r");
+            let ret = si2::lefrRead(fp_for_lefr, path.as_ptr() as *const std::os::raw::c_char, self_ptr);
+            if ret != 0 && self.error.is_none() {
+                self.error = Some(LefReadError::Si2(ERROR_MESSAGE.read().unwrap().clone()));
+                ERROR_MESSAGE.write().unwrap().clear();
+            }
+
+            si2::lefrReleaseNResetMemory();
+
+            libc::fclose(fp);
+        };
+
+        match self.error {
+            None => Ok(self.lef),
+            Some(err) => Err(err),
+        }
+    }
+
+    unsafe extern "C" fn read_version(_: si2::lefrCallbackType_e, version: f64, ud: *mut c_void) -> c_int {
+        unsafe {
+            let reader = &mut *(ud as *mut Self);
+            reader.lef.version = Some(version);
+        }
+        0
+    }
+
+    unsafe extern "C" fn read_busbitchars(_: si2::lefrCallbackType_e, raw: *const c_char, ud: *mut c_void) -> c_int {
+        unsafe {
+            let reader = &mut *(ud as *mut Self);
+            // let busbitchars = utils::const_c_char_ptr_to_cstr(raw);
+            reader.lef.busbitchars = ((*raw) as u8 as char, *raw.add(1) as u8 as char);
+        }
+        0
+    }
+
+    unsafe extern "C" fn read_dividerchar(_: si2::lefrCallbackType_e, raw: *const c_char, ud: *mut c_void) -> c_int {
+        unsafe {
+            let reader = &mut *(ud as *mut Self);
+            // let dividerchar = utils::const_c_char_ptr_to_cstr(raw);
+            reader.lef.dividerchar = (*raw) as u8 as char;
         }
         0
     }
